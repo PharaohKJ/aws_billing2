@@ -1,0 +1,72 @@
+#!/usr/bin/env ruby
+
+# integrate 'bundle install --standalone'
+bundle_setup_path = File.expand_path('../../bundle/bundler/setup.rb', __FILE__)
+require bundle_setup_path if File.exist?(bundle_setup_path)
+
+require 'dotenv'
+require 'thor'
+require 'yaml'
+
+PARAM_FILE = '~/.aws_billing2'.freeze
+
+Dotenv.load(PARAM_FILE, '.env')
+
+require_relative '../lib/aws_billing2'
+
+Class.new(Thor) do
+  desc 'view', 'view'
+  option :bucket_name,
+         desc: 'your bucket name',
+         type: :string,
+         default: ENV['BUCKET_NAME']
+  option :invoice_id,
+         desc: 'your invoice id 1234567890',
+         type: :string,
+         default: ENV['INVOICE_ID']
+  option :access_key_id,
+         desc: 'your access key id',
+         type: :string,
+         default: ENV['ACCESS_KEY_ID']
+  option :secret_access_key,
+         desc: 'our secret access key',
+         type: :string,
+         default: ENV['SECRET_ACCESS_KEY']
+  option :region,
+         desc: 'region (ap-northeast-1)',
+         type: :string,
+         default: ENV['REGION']
+  option :ypd,
+         desc: 'yen per $ (125)',
+         type: :numeric,
+         default: 125
+  option :yearmonth,
+         desc: 'target year-month(2016-03)',
+         type: :string,
+         default: Time.now.strftime('%Y-%m')
+  option :save_param,
+         desc: 'save parameters to ~/.aws_billing2',
+         type: :boolean,
+         default: false
+  option :csv,
+         desc: 'output csv.',
+         type: :boolean,
+         default: false
+  def view
+    ab = AwsBilling2::AwsBilling2.new(options.to_hash)
+    data = ab.fetch_bucket(
+      bucket:     options['bucket_name'],
+      yearmonth:  options['yearmonth'],
+      invoice_id: options['invoice_id']
+    )
+    ab.parse(data)
+    puts ab.gets_table
+    if options['save_param']
+      File.open(File.expand_path(PARAM_FILE), 'w') do |f|
+        %w(BUCKET_NAME INVOICE_ID ACCESS_KEY_ID SECRET_ACCESS_KEY REGION).each do |e|
+          f.puts("#{e}=#{ENV[e]}")
+        end
+      end
+    end
+  end
+end.start(ARGV)
