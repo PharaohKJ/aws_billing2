@@ -35,7 +35,9 @@ module AwsBilling2
       end
 
       @pay.each do |k, l|
-        l.sort! { |a, b| a['ProductName'] <=> b['ProductName'] }
+        l.sort! do |a, b|
+          a['ProductName'].to_s <=> b['ProductName'].to_s
+        end
         l.each do |p|
           next if p['TotalCost'].to_f < 0.001
           # puts "Poject:#{k} #{p['ProductName']} : #{p['ItemDescription']} \n #{p['TotalCost']}"
