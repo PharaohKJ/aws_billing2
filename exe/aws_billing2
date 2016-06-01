@@ -43,6 +43,7 @@ Class.new(Thor) do
   option :yearmonth,
          desc: 'target year-month(2016-03)',
          type: :string,
+         aliases: '-y',
          default: Time.now.strftime('%Y-%m')
   option :save_param,
          desc: 'save parameters to ~/.aws_billing2',
@@ -52,6 +53,10 @@ Class.new(Thor) do
          desc: 'output csv.',
          type: :boolean,
          default: false
+  option :total,
+         desc: 'add total record',
+         type: :boolean,
+         default: true
   def view
     ab = AwsBilling2::AwsBilling2.new(options.to_hash)
     data = ab.fetch_bucket(

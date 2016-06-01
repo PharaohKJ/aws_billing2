@@ -12,6 +12,7 @@ module AwsBilling2
       @payment = {}
       @payment_description = {}
       @format = values[:csv.to_s] ? 'csv' : 'cli'
+      @total_record = values[:total.to_s]
     end
 
     def fetch_bucket(bucket: 'bucketname', yearmonth: Time.now.strftime('%Y-%m'), key: nil, invoice_id: 'invoice_id')
@@ -53,7 +54,7 @@ module AwsBilling2
       end
     end
 
-    def gets_table(format = @format)
+    def gets_table(format = @format, with_total_record = @total_record)
       head = ['PayID', 'Tag', 'Item', '$', "Yen(#{@yen.to_i}/$)", '%']
       rows = []
       @payment_description.each do |k, l|
@@ -62,6 +63,15 @@ module AwsBilling2
           Array('%.5f' % l) +
           Array('%.2f' % (l * @yen)) +
           Array('%8.3f' % (l / @payment['total'] * 100))
+        )
+      end
+      if with_total_record
+        total = @payment['total']
+        rows << (
+          Array('*') + Array('*') + Array('*total*') +
+          Array('%.5f' % total) +
+          Array('%.2f' % (total * @yen)) +
+          Array('%8.3f' % (100))
         )
       end
 
