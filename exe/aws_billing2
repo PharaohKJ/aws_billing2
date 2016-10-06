@@ -37,9 +37,9 @@ Class.new(Thor) do
          type: :string,
          default: ENV['REGION']
   option :ypd,
-         desc: 'yen per $ (125)',
+         desc: 'yen per $',
          type: :numeric,
-         default: 125
+         default: ENV['YPD'] || 125
   option :yearmonth,
          desc: 'target year-month(2016-03)',
          type: :string,
@@ -68,7 +68,7 @@ Class.new(Thor) do
     puts ab.gets_table
     if options['save_param']
       File.open(File.expand_path(PARAM_FILE), 'w') do |f|
-        %w(BUCKET_NAME INVOICE_ID ACCESS_KEY_ID SECRET_ACCESS_KEY REGION).each do |e|
+        %w(BUCKET_NAME INVOICE_ID ACCESS_KEY_ID SECRET_ACCESS_KEY REGION YPD).each do |e|
           f.puts("#{e}=#{ENV[e]}")
         end
       end
