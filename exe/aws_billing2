@@ -39,7 +39,7 @@ Class.new(Thor) do
   option :ypd,
          desc: 'yen per $',
          type: :numeric,
-         default: ENV['YPD'] || 125
+         default: ENV['YPD'].to_i || 125
   option :yearmonth,
          desc: 'target year-month(2016-03)',
          type: :string,
@@ -66,11 +66,10 @@ Class.new(Thor) do
     )
     ab.parse(data)
     puts ab.gets_table
-    if options['save_param']
-      File.open(File.expand_path(PARAM_FILE), 'w') do |f|
-        %w(BUCKET_NAME INVOICE_ID ACCESS_KEY_ID SECRET_ACCESS_KEY REGION YPD).each do |e|
-          f.puts("#{e}=#{ENV[e]}")
-        end
+    return unless options['save_param']
+    File.open(File.expand_path(PARAM_FILE), 'w') do |f|
+      %w(BUCKET_NAME INVOICE_ID ACCESS_KEY_ID SECRET_ACCESS_KEY REGION YPD).each do |e|
+        f.puts("#{e}=#{ENV[e]}")
       end
     end
   end
