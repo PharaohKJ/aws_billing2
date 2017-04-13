@@ -13,6 +13,7 @@ module AwsBilling2
       @payment_description = {}
       @format = values[:csv.to_s] ? 'csv' : 'cli'
       @total_record = values[:total.to_s]
+      @skip_zero_record = values[:skip_zero.to_s]
     end
 
     def fetch_bucket(bucket: 'bucketname', yearmonth: Time.now.strftime('%Y-%m'), key: nil, invoice_id: 'invoice_id')
@@ -40,15 +41,16 @@ module AwsBilling2
           a['ProductName'].to_s <=> b['ProductName'].to_s
         end
         l.each do |p|
-          next if p['TotalCost'].to_f < 0.001
+          next if p['TotalCost'].to_f < 0.00001 && @skip_zero_record == true
           # puts "Poject:#{k} #{p['ProductName']} : #{p['ItemDescription']} \n #{p['TotalCost']}"
-          @payment["#{k}"] = 0 if @payment["#{k}"].nil?
+          @payment[k] = 0 if @payment[k].nil?
           @payment['total'] = 0 if @payment['total'].nil?
-          @payment_description["#{k}-#{p['ProductName']}"] = 0 if @payment_description["#{k}-#{p['ProductName']}"].nil?
+          key = payment_description_key(k, p['ProductName'])
+          @payment_description[key] = 0 if @payment_description[key].nil?
           cost = p['TotalCost'].to_f
-          @payment["#{k}"] += cost
+          @payment[k] += cost
           @payment['total'] += cost
-          @payment_description["#{k}-#{p['ProductName']}"] += cost
+          @payment_description[key] += cost
         end
         # puts '---------'
       end
@@ -102,11 +104,11 @@ module AwsBilling2
     end
 
     def payment_key(project, linked)
-      "#{linked}-#{project}"
+      %(#{linked.delete("\n")}-#{project.delete("\n")})
     end
 
-    def payment_description_key(project, linked, desc)
-      "#{payment_key(project, linked)}-#{desc}"
+    def payment_description_key(payment_key, desc)
+      %(#{payment_key}-#{desc.delete("\n")})
     end
   end
 end
