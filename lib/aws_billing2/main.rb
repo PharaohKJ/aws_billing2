@@ -41,6 +41,7 @@ module AwsBilling2
           a['ProductName'].to_s <=> b['ProductName'].to_s
         end
         l.each do |p|
+          next if p['ProductName'].nil?
           next if p['TotalCost'].to_f < 0.00001 && @skip_zero_record == true
           # puts "Poject:#{k} #{p['ProductName']} : #{p['ItemDescription']} \n #{p['TotalCost']}"
           @payment[k] = 0 if @payment[k].nil?
@@ -104,11 +105,11 @@ module AwsBilling2
     end
 
     def payment_key(project, linked)
-      %(#{linked.delete("\n")}-#{project.delete("\n")})
+      %(#{linked.delete("\n")}-#{project.to_s.delete("\n")})
     end
 
     def payment_description_key(payment_key, desc)
-      %(#{payment_key}-#{desc.delete("\n")})
+      %(#{payment_key}-#{desc.to_s.delete("\n")})
     end
   end
 end
