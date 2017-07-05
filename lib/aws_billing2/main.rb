@@ -2,6 +2,10 @@
 
 module AwsBilling2
   class AwsBilling2
+    def nickname(hash)
+      @nickname = hash
+    end
+
     def initialize(values)
       @aws_config = {}
       [:access_key_id, :secret_access_key, :region].each do |k|
@@ -32,6 +36,7 @@ module AwsBilling2
         next unless acceptable_line?(l)
         project = l['user:Project'].to_s == ''    ? 'none' : l['user:Project']
         linked  = l['LinkedAccountId'].to_s == '' ? 'none' : l['LinkedAccountId']
+        linked = @nickname[linked] unless @nickname[linked].nil?
         @pay[payment_key(project, linked)] = [] if @pay[payment_key(project, linked)].nil?
         @pay[payment_key(project, linked)] << l
       end
@@ -62,7 +67,7 @@ module AwsBilling2
       rows = []
       @payment_description.each do |k, l|
         rows << (
-          Array(k.split('-')) +
+          Array(k.split(':')) +
           Array('%.5f' % l) +
           Array('%.2f' % (l * @yen)) +
           Array('%8.3f' % (l / @payment['total'] * 100))
@@ -105,11 +110,11 @@ module AwsBilling2
     end
 
     def payment_key(project, linked)
-      %(#{linked.delete("\n")}-#{project.to_s.delete("\n")})
+      %(#{linked.delete("\n")}:#{project.to_s.delete("\n")})
     end
 
     def payment_description_key(payment_key, desc)
-      %(#{payment_key}-#{desc.to_s.delete("\n")})
+      %(#{payment_key}:#{desc.to_s.delete("\n")})
     end
   end
 end

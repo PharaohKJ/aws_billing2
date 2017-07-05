@@ -9,12 +9,56 @@ require 'thor'
 require 'yaml'
 
 PARAM_FILE = '~/.aws_billing2'.freeze
+NICK_FILE = File.expand_path('~/.aws_billing2_nickname'.freeze).freeze
 
 Dotenv.load(PARAM_FILE, '.env')
 
 require_relative '../lib/aws_billing2'
 
+class NickNameHelper
+  def self.load
+    nickname_map = {}
+    nickname_map = YAML.load_file(NICK_FILE) if File.exist?(NICK_FILE)
+    nickname_map
+  end
+
+  def self.save(d)
+    File.open(NICK_FILE, 'w') { |f| f.write d.to_yaml }
+  end
+end
+
+class Sub < Thor
+  desc "command", "an example task"
+  def command
+    puts "I'm a thor task!"
+  end
+
+  desc 'add', 'add Nickname'
+  option :pay_id,
+         desc: 'PayID',
+         type: :string,
+         required: true
+  option :nick,
+         desc: 'NickName',
+         type: :string,
+         required: true
+  def add
+    nicknames = NickNameHelper.load
+    nicknames[options[:pay_id]] = options[:nick]
+    NickNameHelper.save(nicknames)
+  end
+
+  desc 'list', 'list Nicknames'
+  def list
+    puts NickNameHelper.load.to_s
+  end
+end
+
 Class.new(Thor) do
+  # desc "parentcommand SUBCOMMAND", "Some Parent Command"
+  desc 'nickname', 'nickname'
+  subcommand "nickname", Sub
+
   desc 'view', 'view'
   option :bucket_name,
          desc: 'your bucket name',
@@ -63,6 +107,7 @@ Class.new(Thor) do
          default: false
   def view
     ab = AwsBilling2::AwsBilling2.new(options.to_hash)
+    ab.nickname(NickNameHelper.load)
     data = ab.fetch_bucket(
       bucket:     options['bucket_name'],
       yearmonth:  options['yearmonth'],
