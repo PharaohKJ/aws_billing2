@@ -30,16 +30,37 @@ module AwsBilling2
       out
     end
 
-    def parse(bucket_value)
-      csv = CSV.new(bucket_value[1..-1].join("\n"), headers: true)
+    def normalize_record(record_with_header)
+      %w(user:Project LinkedAccountId).each do |k|
+        record_with_header[k] = 'none' if record_with_header[k].empty?
+      end
+      record_with_header.each do |k, v|
+        record_with_header[k] = v.to_s.delete("\n")
+      end
+    end
+
+    def take_records(csv)
       csv.each do |l|
         next unless acceptable_line?(l)
-        project = l['user:Project'].to_s == ''    ? 'none' : l['user:Project']
-        linked  = l['LinkedAccountId'].to_s == '' ? 'none' : l['LinkedAccountId']
+        normalize_record(l)
+        project = l['user:Project']
+        linked  = l['LinkedAccountId']
         linked = @nickname[linked] unless @nickname[linked].nil?
-        @pay[payment_key(project, linked)] = [] if @pay[payment_key(project, linked)].nil?
-        @pay[payment_key(project, linked)] << l
+        hash_key = payment_key(project, linked)
+        @pay[hash_key] = Array(@pay[hash_key]) << l
       end
+    end
+
+    def append_total(cost, key, description_key)
+      cost = cost.to_f
+      @payment[key] += cost
+      @payment['total'] += cost
+      @payment_description[description_key] += cost
+    end
+
+    def parse(bucket_value)
+      csv = CSV.new(bucket_value[1..-1].join("\n"), headers: true)
+      take_records(csv)
 
       @pay.each do |k, l|
         l.sort! do |a, b|
@@ -48,17 +69,12 @@ module AwsBilling2
         l.each do |p|
           next if p['ProductName'].nil?
           next if p['TotalCost'].to_f < 0.00001 && @skip_zero_record == true
-          # puts "Poject:#{k} #{p['ProductName']} : #{p['ItemDescription']} \n #{p['TotalCost']}"
           @payment[k] = 0 if @payment[k].nil?
           @payment['total'] = 0 if @payment['total'].nil?
           key = payment_description_key(k, p['ProductName'])
-          @payment_description[key] = 0 if @payment_description[key].nil?
-          cost = p['TotalCost'].to_f
-          @payment[k] += cost
-          @payment['total'] += cost
-          @payment_description[key] += cost
+          @payment_description[key] = @payment_description[key] || 0
+          append_total(p['TotalCost'], k, key)
         end
-        # puts '---------'
       end
     end
 
@@ -79,7 +95,7 @@ module AwsBilling2
           Array('*') + Array('*') + Array('*total*') +
           Array('%.5f' % total) +
           Array('%.2f' % (total * @yen)) +
-          Array('%8.3f' % (100))
+          Array('%8.3f' % 100)
         )
       end
 
