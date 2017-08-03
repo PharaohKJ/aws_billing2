@@ -32,7 +32,7 @@ module AwsBilling2
 
     def normalize_record(record_with_header)
       %w(user:Project LinkedAccountId).each do |k|
-        record_with_header[k] = 'none' if record_with_header[k].empty?
+        record_with_header[k] = 'none' if record_with_header[k].to_s.empty?
       end
       record_with_header.each do |k, v|
         record_with_header[k] = v.to_s.delete("\n")
@@ -119,8 +119,12 @@ module AwsBilling2
     private
 
     def acceptable_line?(line)
-      return true  if line['RecordType'] == 'PayerLineItem'
-      return true  if line['RecordType'] == 'LinkedLineItem'
+      if line['RecordType'] == 'PayerLineItem' && !line['ProductName'].nil?
+        return true
+      end
+      if line['RecordType'] == 'LinkedLineItem' && !line['ProductName'].nil?
+        return true
+      end
       return false if line['TotalCost'].nil?
       false
     end
