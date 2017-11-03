@@ -93,10 +93,11 @@ Class.new(Thor) do
          desc: 'save parameters to ~/.aws_billing2',
          type: :boolean,
          default: false
-  option :csv,
-         desc: 'output csv.',
-         type: :boolean,
-         default: false
+  option :format,
+         desc: 'cli or csv or json',
+         type: :string,
+         aliases: '-f',
+         default: 'cli'
   option :total,
          desc: 'add total record',
          type: :boolean,

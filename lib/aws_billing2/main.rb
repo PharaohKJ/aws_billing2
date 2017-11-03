@@ -15,7 +15,7 @@ module AwsBilling2
       @pay = {}
       @payment = {}
       @payment_description = {}
-      @format = values[:csv.to_s] ? 'csv' : 'cli'
+      @format = values[:format.to_s]
       @total_record = values[:total.to_s]
       @skip_zero_record = values[:skip_zero.to_s]
     end
@@ -79,6 +79,9 @@ module AwsBilling2
     end
 
     def gets_table(format = @format, with_total_record = @total_record)
+      acceptables = %w(csv cli json)
+      raise "Unknown format #{format}. Please select below #{acceptables}." unless acceptables.include?(format)
+
       head = ['PayID', 'Tag', 'Item', '$', "Yen(#{@yen.to_i}/$)", '%']
       rows = []
       @payment_description.each do |k, l|
@@ -99,7 +102,17 @@ module AwsBilling2
         )
       end
 
-      if format == 'csv'
+      if format == 'json'
+        out = []
+        rows.each do |r|
+          record = {}
+          head.each_with_index do |h, i|
+            record[h.to_s] = r[i]
+          end
+          out << record
+        end
+        return out.to_json
+      elsif format == 'csv'
         out = head.join(',') + "\n"
         rows.each do |r|
           out += r.join(',') + "\n"
