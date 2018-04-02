@@ -107,7 +107,7 @@ module AwsBilling2
         rows.each do |r|
           record = {}
           head.each_with_index do |h, i|
-            record[h.to_s] = r[i]
+            record[h.to_s] = r[i].strip
           end
           out << record
         end
