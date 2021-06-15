@@ -28,11 +28,6 @@ class NickNameHelper
 end
 
 class Sub < Thor
-  desc "command", "an example task"
-  def command
-    puts "I'm a thor task!"
-  end
-
   desc 'add', 'add Nickname'
   option :pay_id,
          desc: 'PayID',
@@ -57,7 +52,7 @@ end
 Class.new(Thor) do
   # desc "parentcommand SUBCOMMAND", "Some Parent Command"
   desc 'nickname', 'nickname'
-  subcommand "nickname", Sub
+  subcommand 'nickname', Sub
 
   desc 'view', 'view'
   option :bucket_name,
@@ -122,5 +117,72 @@ Class.new(Thor) do
         f.puts("#{e}=#{ENV[e]}")
       end
     end
+  end
+
+  desc 'cost', 'cost'
+  option :access_key_id,
+         desc: 'your access key id',
+         type: :string,
+         default: ENV['ACCESS_KEY_ID']
+  option :secret_access_key,
+         desc: 'our secret access key',
+         type: :string,
+         default: ENV['SECRET_ACCESS_KEY']
+  option :region,
+         desc: 'region (ap-northeast-1)',
+         type: :string,
+         default: ENV['REGION']
+  def cost
+    puts ENV['ACCESS_KEY_ID']
+    puts ENV['SECRET_ACCESS_KEY']
+
+    @aws_config = {}
+    Aws.config = @aws_config
+    values = options.to_hash
+    %i[access_key_id secret_access_key region].each do |k|
+      @aws_config[k] = values[k.to_s]
+    end
+
+    client = Aws::CostExplorer::Client.new
+    resp = client.get_cost_and_usage(
+      {
+        time_period: {
+          start: '2020-04-01', # required
+          end: '2021-04-01', # required
+        },
+        granularity: 'DAILY', # accepts DAILY, MONTHLY
+        metrics: ['UnblendedCost'],
+        # filter:          {
+        #   or:         [
+        #                 {
+        #                   # recursive Expression
+        #                 },
+        #               ],
+        #   and:        [
+        #                 {
+        #                   # recursive Expression
+        #                 },
+        #               ],
+        #   not:        {
+        #     # recursive Expression
+        #   },
+        #   dimensions: {
+        #     key: "AZ", # accepts AZ, INSTANCE_TYPE, LINKED_ACCOUNT, OPERATION, PURCHASE_TYPE, REGION, SERVICE, USAGE_TYPE, USAGE_TYPE_GROUP, RECORD_TYPE, OPERATING_SYSTEM, TENANCY, SCOPE, PLATFORM, SUBSCRIPTION_ID, LEGAL_ENTITY_NAME, DEPLOYMENT_OPTION, DATABASE_ENGINE, CACHE_ENGINE, INSTANCE_TYPE_FAMILY
+        #     values: ["Value"],
+        #   },
+        #   tags:       {
+        #     # key: "TagKey",
+        #     # values: ["Value"],
+        #   },
+        # }, group_by:     [
+        #                    {
+        #                      type: "AZ", # accepts DIMENSION, TAG
+        #                      key: "GroupDefinitionKey",
+        #                    },
+        #                  ],
+        # next_page_token: "NextPageToken",
+      })
+    pp resp
+    binding.irb
   end
 end.start(ARGV)
