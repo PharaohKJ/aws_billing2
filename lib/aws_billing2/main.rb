@@ -8,7 +8,7 @@ module AwsBilling2
 
     def initialize(values)
       @aws_config = {}
-      [:access_key_id, :secret_access_key, :region].each do |k|
+      %i[access_key_id secret_access_key region].each do |k|
         @aws_config[k] = values[k.to_s]
       end
       @yen = BigDecimal(values[:ypd.to_s].to_f.to_s)
@@ -29,7 +29,7 @@ module AwsBilling2
     end
 
     def normalize_record(record_with_header)
-      %w(user:Project LinkedAccountId).each do |k|
+      %w[user:Project LinkedAccountId].each do |k|
         record_with_header[k] = 'none' if record_with_header[k].to_s.empty?
       end
       record_with_header.each do |k, v|
@@ -43,7 +43,7 @@ module AwsBilling2
         next unless acceptable_line?(l)
 
         normalize_record(l)
-        new_record = Record.from_csv_row(l, skip_zero: @skip_zero_record)
+        new_record = Record.from_csv_row(l, skip_zero: @skip_zero_record, nicknames: @nickname)
         @records << new_record
         @records.compact!
       end
@@ -53,12 +53,19 @@ module AwsBilling2
       csv = CSV.new(bucket_value[1..-1].join("\n"), headers: true)
       take_records(csv)
 
-      @records.sort! { |a, b| b.val <=> a.val }.sort! { |a, b| a.sort_key <=> b.sort_key }
+      @records.sort! do |a, b|
+        r = a.sort_key <=> b.sort_key
+        next r unless r.zero?
+
+        next b.val <=> a.val
+      end
     end
 
     def gets_table(format = @format)
-      acceptables = %w(csv cli json)
-      raise "Unknown format #{format}. Please select below #{acceptables}." unless acceptables.include?(format)
+      acceptable_values = %w[csv cli json]
+      unless acceptable_values.include?(format)
+        raise "Unknown format #{format}. Please select below #{acceptable_values}."
+      end
 
       head = ['PayID', 'Tag', 'Item', '$', "Yen(#{@yen.to_i}/$)", '%']
       rows = []
@@ -71,7 +78,6 @@ module AwsBilling2
 
       loss_records = records.select(&:loss?)
       loss_total = loss_records.sum(&:val).to_f
-
 
       records.each do |r|
         rate = '-'
@@ -144,12 +150,8 @@ module AwsBilling2
     private
 
     def acceptable_line?(line)
-      if line['RecordType'] == 'PayerLineItem' && !line['ProductName'].nil?
-        return true
-      end
-      if line['RecordType'] == 'LinkedLineItem' && !line['ProductName'].nil?
-        return true
-      end
+      return true if line['RecordType'] == 'PayerLineItem' && !line['ProductName'].nil?
+      return true if line['RecordType'] == 'LinkedLineItem' && !line['ProductName'].nil?
       return false if line['TotalCost'].nil?
 
       false
