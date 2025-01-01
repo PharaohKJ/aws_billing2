@@ -31,11 +31,16 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rake"
   spec.add_development_dependency "rspec"
 
+  spec.add_runtime_dependency 'nokogiri'
   spec.add_runtime_dependency "thor"
   spec.add_runtime_dependency 'aws-sdk-s3'
   spec.add_runtime_dependency "text-table"
   spec.add_runtime_dependency "dotenv"
   spec.add_runtime_dependency "webrick"
-
+  spec.add_runtime_dependency "sqlite3"
+  spec.add_runtime_dependency "csv"
+  spec.add_runtime_dependency "logger"
+  spec.add_runtime_dependency 'bigdecimal'
+  spec.add_runtime_dependency 'base64'
   spec.add_runtime_dependency 'aws-sdk-costexplorer'
 end

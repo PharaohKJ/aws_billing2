@@ -74,11 +74,12 @@ Class.new(Thor) do
   option :region,
          desc: 'region (ap-northeast-1)',
          type: :string,
-         default: ENV['REGION']
+         aliases: '-r',
+         default: ENV['REGION'] or ENV['AWS_REGION'] or 'ap-northeast-1'
   option :ypd,
          desc: 'yen per $',
          type: :numeric,
-         default: ENV['YPD'].to_i || 125
+         default: ENV.fetch('YPD', 150).to_i
   option :yearmonth,
          desc: 'target year-month(2016-03)',
          type: :string,
@@ -102,20 +103,110 @@ Class.new(Thor) do
          type: :boolean,
          default: false
   def view
+    # puts options
     ab = AwsBilling2::AwsBilling2.new(options.to_hash)
     ab.nickname(NickNameHelper.load)
-    data = ab.fetch_bucket(
-      bucket:     options['bucket_name'],
-      yearmonth:  options['yearmonth'],
-      invoice_id: options['invoice_id']
-    )
-    ab.parse(data)
+    ab.fetch_bucket
+    ab.parse
     puts ab.gets_table
     return unless options['save_param']
     File.open(File.expand_path(PARAM_FILE), 'w') do |f|
       %w(BUCKET_NAME INVOICE_ID ACCESS_KEY_ID SECRET_ACCESS_KEY REGION YPD).each do |e|
         f.puts("#{e}=#{ENV[e]}")
       end
+    end
+  end
+
+  desc 'store_db', 'store_db'
+  option :bucket_name,
+         desc: 'your bucket name',
+         type: :string,
+         default: ENV['BUCKET_NAME']
+  option :invoice_id,
+         desc: 'your invoice id 1234567890',
+         type: :string,
+         default: ENV['INVOICE_ID']
+  option :access_key_id,
+         desc: 'your access key id',
+         type: :string,
+         default: ENV['ACCESS_KEY_ID']
+  option :secret_access_key,
+         desc: 'our secret access key',
+         type: :string,
+         default: ENV['SECRET_ACCESS_KEY']
+  option :region,
+         desc: 'region (ap-northeast-1)',
+         type: :string,
+         aliases: '-r',
+         default: ENV['REGION'] or ENV['AWS_REGION'] or 'ap-northeast-1'
+  option :ypd,
+         desc: 'yen per $',
+         type: :numeric,
+         default: ENV.fetch('YPD', 150).to_i
+  option :yearmonth,
+         desc: 'target year-month(2016-03)',
+         type: :string,
+         aliases: '-y',
+         default: Time.now.strftime('%Y-%m')
+  option :filename,
+         desc: 'sqlite3 database file',
+         type: :string,
+         aliases: '-d',
+         default: 'aws_costs.db'
+  def store_db
+    require 'sqlite3'
+    opts = options.to_hash
+    opts['format'] = 'csv'
+    ab = AwsBilling2::AwsBilling2.new(opts)
+    ab.nickname(NickNameHelper.load)
+    ab.fetch_bucket
+    ab.parse
+    if ab.records.empty?
+      STDERR.puts 'records are empty'
+      return
+    end
+    ab.sort_records
+
+    csv = ab.gets_table
+    fname = opts['filename'] || 'aws_costs.db'
+    File.delete(fname) if File.exist?(fname)
+    db = SQLite3::Database.new(fname)
+    sql_create = <<-SQL
+      CREATE TABLE aws_costs (
+        id integer PRIMARY KEY AUTOINCREMENT,
+        ym string,
+        year integer,
+        month integer,
+        store_at string,
+        pay_id string,
+        tag string,
+        item string,
+        cost real,
+        cost_string string,
+        yen real,
+        yen_string string
+      );
+      SQL
+    db.execute(sql_create)
+
+    year, month = opts["yearmonth"].split('-')
+
+    CSV.parse(csv, headers: true).each do |row|
+      next if row[0] == '----' || row[0] == '*'
+      sql_insert =  <<-SQL
+        INSERT INTO aws_costs(
+          ym, year, month, store_at,
+          pay_id, tag, item, 
+          cost, cost_string, 
+          yen, yen_string) 
+        VALUES(
+          '#{opts["yearmonth"]}', #{year}, #{month}, datetime('now', '+9 hours'),
+          '#{row[0]}', '#{row[1]}', '#{row[2]}', 
+          '#{row[3]}', '#{row[3]}', 
+          '#{row[4]}', '#{row[4]}'
+        )
+      SQL
+      db.execute(sql_insert)
     end
   end
 
@@ -131,10 +222,8 @@ Class.new(Thor) do
   option :region,
          desc: 'region (ap-northeast-1)',
          type: :string,
-         default: ENV['REGION']
+         default: ENV['REGION'] or ENV['AWS_REGION'] or 'ap-northeast-1'
   def cost
-    puts ENV['ACCESS_KEY_ID']
-    puts ENV['SECRET_ACCESS_KEY']
 
     @aws_config = {}
     Aws.config = @aws_config

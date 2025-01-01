@@ -2,7 +2,7 @@ module AwsBilling2
   class Record
     attr_accessor :key, :val, :original_row, :project, :linked, :product, :usage
 
-    def self.from_csv_row(csv_row, skip_zero: false)
+    def self.from_csv_row(csv_row, skip_zero: false, nicknames: {})
       out = Record.new
 
       return nil if csv_row['ProductName'].nil?
@@ -13,6 +13,7 @@ module AwsBilling2
 
       out.project      = csv_row['user:Project'].to_s.strip.gsub(/[\r\n]/, '')
       out.linked       = csv_row['LinkedAccountId'].to_s.strip.gsub(/[\r\n]/, '')
+      out.linked       = nicknames.fetch(out.linked, out.linked) if out.linked
       out.product      = csv_row['ProductName'].to_s.strip.gsub(/[\r\n]/, '')
       out.val          = BigDecimal(total_cost_s)
       out.usage        = csv_row['UsageType'].to_s.strip.gsub(/[\r\n]/, '')
@@ -29,11 +30,18 @@ module AwsBilling2
     end
 
     def product_with_usage
-      "#{@product} (#{@usage})"
+      "#{product_nick_name} (#{@usage})"
     end
 
     def sort_key
-      [@linked, @product, product_with_usage].join(' ')
+      [@linked, @project, product_with_usage].join(' ')
+    end
+
+    def product_nick_name
+      @product.gsub('Amazon', 'A.')
+              .gsub('Simple Storage Service', 'S3')
+              .gsub('Elastic Compute Cloud', 'EC2')
+              .gsub('AWS', 'A.')
     end
   end
 end

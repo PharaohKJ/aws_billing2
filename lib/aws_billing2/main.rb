@@ -2,13 +2,15 @@
 
 module AwsBilling2
   class AwsBilling2
+    attr_reader :records
     def nickname(hash)
       @nickname = hash
     end
 
     def initialize(values)
+      @options = values
       @aws_config = {}
-      [:access_key_id, :secret_access_key, :region].each do |k|
+      %i[access_key_id secret_access_key region].each do |k|
         @aws_config[k] = values[k.to_s]
       end
       @yen = BigDecimal(values[:ypd.to_s].to_f.to_s)
@@ -16,20 +18,31 @@ module AwsBilling2
       @total_record = values[:total.to_s]
       @skip_zero_record = values[:skip_zero.to_s]
       @records = []
+
+      @fetched_values = nil
     end
 
-    def fetch_bucket(bucket: 'bucketname', yearmonth: Time.now.strftime('%Y-%m'), key: nil, invoice_id: 'invoice_id')
-      out = []
-      key ||= "#{invoice_id}-aws-cost-allocation-#{yearmonth}.csv"
-      Aws.config = @aws_config
-      Aws::S3::Client.new.get_object(bucket: bucket, key: key) do |chunk|
-        out += chunk.split("\n")
+    def fetch_bucket(
+      bucket: @options['bucket_name'],
+      yearmonth: @options['yearmonth'] || Time.now.strftime('%Y-%m'),
+      key: nil,
+      invoice_id: @options['invoice_id'],
+      region: @options['region']
+    )
+      @fetched_values = []
+      key             ||= "#{invoice_id}-aws-cost-allocation-#{yearmonth}.csv"
+      Aws.config      = @aws_config
+      Aws::S3::Client.new(region: region)
+                     .get_object(bucket: bucket, key: key) do |chunk|
+        @fetched_values += chunk.split("\n")
       end
-      out
+    rescue Aws::S3::Errors::NoSuchKey => e
+      STDERR.puts(e)
+      STDERR.puts("#{key} is not found.")
     end
 
     def normalize_record(record_with_header)
-      %w(user:Project LinkedAccountId).each do |k|
+      %w[user:Project LinkedAccountId].each do |k|
         record_with_header[k] = 'none' if record_with_header[k].to_s.empty?
       end
       record_with_header.each do |k, v|
@@ -43,22 +56,33 @@ module AwsBilling2
         next unless acceptable_line?(l)
 
         normalize_record(l)
-        new_record = Record.from_csv_row(l, skip_zero: @skip_zero_record)
+        new_record = Record.from_csv_row(l, skip_zero: @skip_zero_record, nicknames: @nickname)
         @records << new_record
         @records.compact!
       end
     end
 
-    def parse(bucket_value)
-      csv = CSV.new(bucket_value[1..-1].join("\n"), headers: true)
-      take_records(csv)
+    def sort_records
+      @records.sort! do |a, b|
+        r = a.sort_key <=> b.sort_key
+        next r unless r.zero?
 
-      @records.sort! { |a, b| b.val <=> a.val }.sort! { |a, b| a.sort_key <=> b.sort_key }
+        next b.val <=> a.val
+      end
+    end
+
+    def parse
+      fetch_bucket if @fetched_values.nil?
+      return if @fetched_values.empty?
+      csv = CSV.new(@fetched_values[1..-1].join("\n"), headers: true)
+      take_records(csv)
     end
 
     def gets_table(format = @format)
-      acceptables = %w(csv cli json)
-      raise "Unknown format #{format}. Please select below #{acceptables}." unless acceptables.include?(format)
+      acceptable_values = %w[csv cli json]
+      unless acceptable_values.include?(format)
+        raise "Unknown format '#{format}'.   Please select below #{acceptable_values}."
+      end
 
       head = ['PayID', 'Tag', 'Item', '$', "Yen(#{@yen.to_i}/$)", '%']
       rows = []
@@ -72,46 +96,46 @@ module AwsBilling2
       loss_records = records.select(&:loss?)
       loss_total = loss_records.sum(&:val).to_f
 
-
       records.each do |r|
         rate = '-'
         unless r.val.zero?
           rate = '%8.3f' % (if r.profit?
-                              r.val / profit_total
-                            else
-                              r.val / loss_total
+                            r.val / profit_total
+                           else
+                             r.val / loss_total
                             end * 100)
         end
         rows << (
           Array(r.linked) + Array(r.project) + Array(r.product_with_usage) +
-            Array('%.5f' % r.val.to_f) +
-            Array('%.2f' % (r.val.to_f * @yen)) +
-            Array(rate)
+          Array('%.5f' % r.val.to_f) +
+          Array('%.2f' % (r.val.to_f * @yen)) +
+          Array(rate)
         )
       end
 
+      rows.sort_by! { _1[3] }
+      rows.sort_by! { _1[2] }
+
       rows << (
         Array('----')  + Array('----') + Array('----') +
-          Array('-------') +
-          Array('-----') +
-          Array('-------------')
+        Array('-------') +
+        Array('-----') +
+        Array('-------------')
       )
 
       rows << (
         Array('*') + Array('*') + Array('* profit total *') +
-          Array('%.5f' % profit_total) +
-          Array('%.2f' % (profit_total * @yen)) +
-          Array('*')
+        Array('%.5f' % profit_total) +
+        Array('%.2f' % (profit_total * @yen)) +
+        Array('*')
       )
 
       rows << (
         Array('*') + Array('*') + Array('* loss total *') +
-          Array('%.5f' % loss_total) +
-          Array('%.2f' % (loss_total * @yen)) +
-          Array('*')
+        Array('%.5f' % loss_total) +
+        Array('%.2f' % (loss_total * @yen)) +
+        Array('*')
       )
-
-
 
       case format
       when 'json'
@@ -144,12 +168,8 @@ module AwsBilling2
     private
 
     def acceptable_line?(line)
-      if line['RecordType'] == 'PayerLineItem' && !line['ProductName'].nil?
-        return true
-      end
-      if line['RecordType'] == 'LinkedLineItem' && !line['ProductName'].nil?
-        return true
-      end
+      return true if line['RecordType'] == 'PayerLineItem' && !line['ProductName'].nil?
+      return true if line['RecordType'] == 'LinkedLineItem' && !line['ProductName'].nil?
       return false if line['TotalCost'].nil?
 
       false
