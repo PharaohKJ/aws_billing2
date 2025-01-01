@@ -38,7 +38,10 @@ module AwsBilling2
     end
 
     def product_nick_name
-      @product.gsub('Amazon', 'A').gsub('Simple Storage Service', 'S3').gsub('Elastic Compute Cloud', 'EC2')
+      @product.gsub('Amazon', 'A.')
+              .gsub('Simple Storage Service', 'S3')
+              .gsub('Elastic Compute Cloud', 'EC2')
+              .gsub('AWS', 'A.')
     end
   end
 end

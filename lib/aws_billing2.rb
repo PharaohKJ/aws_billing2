@@ -6,6 +6,7 @@ module AwsBilling2
   require 'CSV'
   require 'text-table'
   require 'bigdecimal'
+  require 'sqlite3'
   require 'aws_billing2/record'
   require 'aws_billing2/main'
 end
